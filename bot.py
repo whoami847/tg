@@ -5,11 +5,12 @@ from telegraph import Telegraph, upload_file
 
 # লগিং সেটআপ
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # পরিবেশ থেকে টোকেন এবং API তথ্য নেওয়া
 TOKEN = os.environ.get("TOKEN")
-API_ID = os.environ.get("API_ID")  # ভবিষ্যতের জন্য যোগ করা, এখন ব্যবহৃত হচ্ছে না
-API_HASH = os.environ.get("API_HASH")  # ভবিষ্যতের জন্য যোগ করা, এখন ব্যবহৃত হচ্ছে না
+API_ID = os.environ.get("API_ID")
+API_HASH = os.environ.get("API_HASH")
 
 def start(update, context):
     update.message.reply_text("আমি একটি টেলিগ্রাফ বট! ছবি বা টেক্সট পাঠান, আমি Telegra.ph-এ আপলোড করে লিঙ্ক দেব।")
@@ -34,30 +35,36 @@ def handle_text(update, context):
         )
         page_url = response['url']
         update.message.reply_text(f"আপনার টেক্সট পেজ: {page_url}")
-        # শিরোনাম ব্যবহারের পর মুছে ফেলা
         if 'title' in context.user_data:
             del context.user_data['title']
     except Exception as e:
-        logging.error(f"পেজ তৈরিতে সমস্যা: {e}")
+        logger.error(f"পেজ তৈরিতে সমস্যা: {e}")
         update.message.reply_text("পেজ তৈরিতে সমস্যা হয়েছে।")
 
 def handle_image(update, context):
     if update.message.document:
         file = update.message.document
         if file.mime_type.startswith('image/'):
-            # ফাইল ডাউনলোড করা
-            file_path = context.bot.get_file(file.file_id).download()
-            # Telegra.ph-এ আপলোড করা
             try:
+                # ফাইল ডাউনলোড করা
+                file_path = context.bot.get_file(file.file_id).download()
+                logger.info(f"ফাইল ডাউনলোড সফল: {file_path}")
+                # Telegra.ph-এ আপলোড করা
                 response = upload_file(file_path)
-                link = f"https://telegra.ph{response[0]}"
-                update.message.reply_text(f"আপনার ছবির লিঙ্ক: {link}")
+                if response and len(response) > 0:
+                    link = f"https://telegra.ph{response[0]}"
+                    logger.info(f"লিঙ্ক তৈরি: {link}")
+                    update.message.reply_text(f"আপনার ছবির লিঙ্ক: {link}")
+                else:
+                    logger.error("কোনো লিঙ্ক ফেরত পাওয়া যায়নি।")
+                    update.message.reply_text("আপলোডে সমস্যা হয়েছে।")
             except Exception as e:
-                logging.error(f"আপলোডে সমস্যা: {e}")
-                update.message.reply_text("আপলোডে সমস্যা হয়েছে।")
+                logger.error(f"আপলোডে সমস্যা: {e}")
+                update.message.reply_text(f"আপলোডে ত্রুটি: {str(e)}")
             finally:
-                # ফাইল মুছে ফেলা
-                os.remove(file_path)
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                    logger.info(f"ফাইল মুছে ফেলা হয়েছে: {file_path}")
         else:
             update.message.reply_text("দয়া করে একটি ছবি পাঠান (ডকুমেন্ট হিসেবে)।")
     else:
@@ -65,7 +72,7 @@ def handle_image(update, context):
 
 def main():
     if not TOKEN:
-        logging.error("টোকেন পাওয়া যায়নি। পরিবেশ ভেরিয়েবলে TOKEN সেট করুন।")
+        logger.error("টোকেন পাওয়া যায়নি। পরিবেশ ভেরিয়েবলে TOKEN সেট করুন।")
         return
 
     updater = Updater(TOKEN, use_context=True)
@@ -73,9 +80,13 @@ def main():
 
     # Telegraph অ্যাকাউন্ট তৈরি
     telegraph = Telegraph()
-    telegraph.create_account(short_name='MyBot')
-    dp.bot_data['telegraph'] = telegraph
-    logging.info("Telegraph অ্যাকাউন্ট সফলভাবে তৈরি হয়েছে।")
+    try:
+        telegraph.create_account(short_name='MyBot')
+        dp.bot_data['telegraph'] = telegraph
+        logger.info("Telegraph অ্যাকাউন্ট সফলভাবে তৈরি হয়েছে।")
+    except Exception as e:
+        logger.error(f"Telegraph অ্যাকাউন্ট তৈরিতে সমস্যা: {e}")
+        return
 
     # হ্যান্ডলার যোগ করা
     dp.add_handler(CommandHandler("start", start))
