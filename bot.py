@@ -94,9 +94,13 @@ def main():
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_text))
     dp.add_handler(MessageHandler(Filters.document, handle_image))
 
-    # বট চালু করা
-    updater.start_polling()
-    updater.idle()
+    # Polling শুরু করা
+    try:
+        updater.start_polling(allowed_updates=[])  # সংঘর্ষ এড়ানোর জন্য allowed_updates নির্দিষ্ট করা
+        logger.info("বট সফলভাবে চালু হয়েছে।")
+        updater.idle()
+    except Exception as e:
+        logger.error(f"Polling ত্রুটি: {e}")
 
 if __name__ == '__main__':
     main()
